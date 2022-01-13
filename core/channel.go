@@ -112,7 +112,10 @@ type Channel struct {
 
 func (c *Connection) newChannel(reqChanBufSize, replyChanBufSize int) *Channel {
 	// create new channel
-	chID := uint16(atomic.AddUint32(&c.maxChannelID, 1) & 0x7fff)
+	newIdOk := false
+	maxChNum := uint32(0x7fff)
+	chID := uint16(0)
+
 	channel := &Channel{
 		id:                  chID,
 		conn:                c,
@@ -124,10 +127,26 @@ func (c *Connection) newChannel(reqChanBufSize, replyChanBufSize int) *Channel {
 		receiveReplyTimeout: ReplyChannelTimeout,
 	}
 
-	// store API channel within the client
-	c.channelsLock.Lock()
-	c.channels[chID] = channel
-	c.channelsLock.Unlock()
+	for i := uint32(0); i < maxChNum; i++ {
+		chID = uint16(atomic.AddUint32(&c.maxChannelID, 1) & maxChNum)
+
+		// store API channel within the client
+		c.channelsLock.Lock()
+		if _, exist := c.channels[chID]; !exist {
+			c.channels[chID] = channel
+			channel.id = chID
+			c.channelsLock.Unlock()
+			newIdOk = true
+			break
+		}
+		c.channelsLock.Unlock()
+	}
+
+	if !newIdOk {
+		log.WithField("channel", chID).Error("govpp new channel id-map is full")
+	} else {
+		log.WithField("channel", chID).Debug("govpp new-channel")
+	}
 
 	return channel
 }
