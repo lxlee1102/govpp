@@ -233,6 +233,17 @@ func (c *Connection) disconnectVPP() {
 	}
 }
 
+func (c *Connection) disconnectVPPWithNoHealthCheckDone() {
+	if atomic.CompareAndSwapUint32(&c.vppConnected, 1, 0) {
+		log.Debug("Disconnecting from VPP..")
+
+		if err := c.vppClient.Disconnect(); err != nil {
+			log.Debugf("Disconnect from VPP failed: %v", err)
+		}
+		log.Debug("Disconnected from VPP")
+	}
+}
+
 func (c *Connection) NewAPIChannel() (api.Channel, error) {
 	return c.newAPIChannel(RequestChanBufSize, ReplyChanBufSize)
 }
@@ -380,7 +391,8 @@ HealthCheck:
 	}
 
 	// cleanup
-	c.disconnectVPP()
+	//c.disconnectVPP()
+	c.disconnectVPPWithNoHealthCheckDone()
 
 	// we are now disconnected, start connect loop
 	c.connectLoop()
